@@ -22,6 +22,8 @@ import os
 import logging
 from typing import Dict, List, Optional
 from contextlib import ExitStack
+import json
+from google.oauth2.service_account import Credentials
 
 from telegram import (
     Update,
@@ -47,6 +49,13 @@ from telegram.ext import (
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
+GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
+SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
+
+if not GOOGLE_CREDENTIALS_JSON or not SPREADSHEET_ID:
+    raise RuntimeError("Google Sheets ENV vars missing")
+
+GOOGLE_CREDS_INFO = json.loads(GOOGLE_CREDENTIALS_JSON)
 
 # -------------------------
 # logging
@@ -70,11 +79,10 @@ if not OWNER_CHAT_ID:
 
 OWNER_CHAT_ID_INT = int(OWNER_CHAT_ID)
 
-GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE")
-SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
-
-if not GOOGLE_SERVICE_ACCOUNT_FILE or not SPREADSHEET_ID:
-    raise RuntimeError("Google Sheets ENV vars missing")
+creds = service_account.Credentials.from_service_account_file(
+    GOOGLE_SERVICE_ACCOUNT_FILE,
+    scopes=["https://www.googleapis.com/auth/spreadsheets"],
+)
 
 STAFF_CHAT_IDS = {
     int(x) for x in os.getenv("STAFF_CHAT_IDS", "").split(",")
@@ -1664,8 +1672,8 @@ def register_user_if_new(user):
     return True
 
 def get_sheets_service():
-    creds = service_account.Credentials.from_service_account_file(
-        GOOGLE_SERVICE_ACCOUNT_FILE,
+    creds = Credentials.from_service_account_info(
+        GOOGLE_CREDS_INFO,
         scopes=["https://www.googleapis.com/auth/spreadsheets"],
     )
     return build("sheets", "v4", credentials=creds)
