@@ -79,10 +79,6 @@ if not OWNER_CHAT_ID:
 
 OWNER_CHAT_ID_INT = int(OWNER_CHAT_ID)
 
-creds = service_account.Credentials.from_service_account_file(
-    GOOGLE_SERVICE_ACCOUNT_FILE,
-    scopes=["https://www.googleapis.com/auth/spreadsheets"],
-)
 
 STAFF_CHAT_IDS = {
     int(x) for x in os.getenv("STAFF_CHAT_IDS", "").split(",")
