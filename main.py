@@ -667,14 +667,91 @@ async def dash_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
 
     if chat_id != OWNER_CHAT_ID_INT:
-        log.warning(f"⛔ /dash denied for chat_id={chat_id}")
         return
 
-    log.info("📊 /dash called by OWNER")
+    service = get_sheets_service()
+    sheet = service.spreadsheets()
+
+    result = sheet.values().get(
+        spreadsheetId=SPREADSHEET_ID,
+        range="orders!A:M",
+    ).execute()
+
+    rows = result.get("values", [])
+    if len(rows) < 2:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="📊 Дашборд\n\nЗаказов пока нет.",
+        )
+        return
+
+    now = datetime.utcnow()
+    today = now.date()
+    week_ago = now - timedelta(days=7)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    revenue_today = 0
+    revenue_week = 0
+    revenue_month = 0
+
+    pending = approved = rejected = 0
+    reaction_times = []
+
+    for row in rows[1:]:
+        try:
+            created_at = datetime.fromisoformat(row[1])
+            total = int(row[5])
+            status = row[9]
+            reaction_seconds = row[12] if len(row) > 12 else ""
+
+        except Exception:
+            continue
+
+        if created_at.date() == today:
+            revenue_today += total
+
+        if created_at >= week_ago:
+            revenue_week += total
+
+        if created_at >= month_start:
+            revenue_month += total
+
+        if status == "pending":
+            pending += 1
+        elif status == "approved":
+            approved += 1
+        elif status == "rejected":
+            rejected += 1
+
+        if reaction_seconds:
+            try:
+                reaction_times.append(int(reaction_seconds))
+            except Exception:
+                pass
+
+    avg_reaction_min = (
+        sum(reaction_times) / len(reaction_times) / 60
+        if reaction_times else 0
+    )
+
+    text = (
+        "📊 <b>Дашборд владельца</b>\n\n"
+        "💰 <b>Выручка</b>\n"
+        f"• Сегодня: <b>{_fmt_money(revenue_today)}</b>\n"
+        f"• За 7 дней: <b>{_fmt_money(revenue_week)}</b>\n"
+        f"• За месяц: <b>{_fmt_money(revenue_month)}</b>\n\n"
+        "📦 <b>Статусы заказов</b>\n"
+        f"• В ожидании: <b>{pending}</b>\n"
+        f"• Приняты: <b>{approved}</b>\n"
+        f"• Отклонены: <b>{rejected}</b>\n\n"
+        "⏱ <b>Среднее время реакции</b>\n"
+        f"• {avg_reaction_min:.1f} мин"
+    )
 
     await context.bot.send_message(
         chat_id=chat_id,
-        text="📊 Дашборд владельца\n\n(в разработке)",
+        text=text,
+        parse_mode=ParseMode.HTML,
     )
 
 
