@@ -634,7 +634,24 @@ async def render_help(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
     )
     track_msg(context, m.message_id)
 
+async def render_product_list(
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_id: int,
+    category: str,
+):
+    nav = _get_nav(context)
+    nav["screen"] = "product_list"
+    nav["last_category"] = category
 
+    await clear_ui(context, chat_id)
+
+    msg = await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"📦 <b>{category}</b>\nВыберите позицию:",
+        parse_mode=ParseMode.HTML,
+        reply_markup=kb_products(category),
+    )
+    track_msg(context, msg.message_id)
 
 # -------------------------
 # /start
