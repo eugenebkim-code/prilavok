@@ -1210,7 +1210,7 @@ async def on_buyer_payment_photo(update: Update, context: ContextTypes.DEFAULT_T
     preview_text = build_checkout_preview(
         cart=cart,
         kind_label=kind_label,
-        comment=text,
+        comment=comment,
         address=checkout.get("address"),
     )
 
