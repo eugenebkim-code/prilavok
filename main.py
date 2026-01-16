@@ -1974,7 +1974,6 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
     service = get_sheets_service()
     sheet = service.spreadsheets()
 
-    # --- читаем заказ ---
     result = sheet.values().get(
         spreadsheetId=SPREADSHEET_ID,
         range="orders!A:M",
@@ -1982,7 +1981,6 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
 
     rows = result.get("values", [])
     if len(rows) < 2:
-        log.warning("⚠️ notify_staff: orders sheet empty")
         return
 
     target = None
@@ -1992,7 +1990,6 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
             break
 
     if not target:
-        log.warning(f"⚠️ notify_staff: order {order_id} not found")
         return
 
     (
@@ -2003,28 +2000,14 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
         items,
         total,
         kind,
-        address,
         comment,
         payment_file_id,
         status,
         *_,
     ) = target + [""] * 5
-    address_block = (
-        f"\n📍 <b>Адрес:</b>\n<code>{address}</code>\n"
-        if address else ""
-    )
-    if status != "pending":
-        log.info(f"ℹ️ notify_staff skipped: status={status}")
-        return
 
-    for staff_id in STAFF_CHAT_IDS:
-        await context.bot.send_photo(
-            chat_id=staff_id,
-            photo=payment_file_id,
-            caption=caption,
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb_staff_order(order_id),
-        )
+    if status != "pending":
+        return
 
     # --- читаем покупателя ---
     buyer_name = ""
@@ -2051,6 +2034,18 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
         f"Способ: <b>{kind}</b>\n"
         f"Комментарий: <b>{comment or '—'}</b>"
     )
+
+    for staff_id in STAFF_CHAT_IDS:
+        try:
+            await context.bot.send_photo(
+                chat_id=staff_id,
+                photo=payment_file_id,
+                caption=caption,
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb_staff_order(order_id),
+            )
+        except Exception as e:
+            log.warning(f"notify_staff failed for {staff_id}: {e}")
 
 for staff_id in STAFF_CHAT_IDS:
     try:
