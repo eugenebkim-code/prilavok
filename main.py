@@ -1042,58 +1042,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await render_cart(context, chat_id)
         return
 
-    if data == "checkout:send":
-        checkout = context.user_data.get("checkout", {})
-        cart = _get_cart(context)
-
-        kind = checkout.get("type", "pickup")
-        comment = checkout.get("comment", "")
-        kind_label = "Самовывоз" if kind == "pickup" else "Доставка"
-
-        user = q.from_user
-        user_line = f"{user.full_name} (@{user.username})" if user.username else user.full_name
-
-        await context.bot.send_message(
-            chat_id=ADMIN_CHAT_ID_INT,
-            text=(
-                "🛎 <b>Новый заказ</b>\n\n"
-                f"Клиент: <b>{user_line}</b>\n"
-                f"Способ: <b>{kind_label}</b>\n\n"
-                f"{cart_text(cart)}\n\n"
-                f"Комментарий: <b>{comment or '-'}</b>"
-            ),
-            parse_mode=ParseMode.HTML,
-        )
-
-        order_id = save_order_to_sheets(user, cart, kind_label, comment)
-        if not order_id:
-            await clear_ui(context, chat_id)
-            m = await context.bot.send_message(
-                chat_id=chat_id,
-                text="❗ Не удалось создать заказ. Попробуйте еще раз через минуту.",
-                parse_mode=ParseMode.HTML,
-                reply_markup=kb_home(),
-            )
-            track_msg(context, m.message_id)
-            return
-
-        context.user_data["cart"] = {}
-        context.user_data.pop("checkout", None)
-        context.user_data.pop("checkout_step", None)
-
-        await clear_ui(context, chat_id)
-        m = await context.bot.send_message(
-            chat_id=chat_id,
-            text=(
-                "✅ <b>Заказ отправлен</b>\n\n"
-                "Если оплата при получении — просто ожидайте подтверждения."
-            ),
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb_home(),
-        )
-        track_msg(context, m.message_id)
-        return
-
+    
 async def on_buyer_payment_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log.info("📸 BUYER PAYMENT PHOTO HANDLER FIRED")
     msg = update.message
@@ -1570,208 +1519,7 @@ async def checkout_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     track_msg(context, m.message_id)
     return CHECKOUT_TYPE
 
-async def checkout_pick_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    q = update.callback_query
-    await q.answer()
-    chat_id = q.message.chat_id
-    data = q.data or ""
 
-    if data == "checkout:cancel":
-        await render_cart(context, chat_id)
-        return ConversationHandler.END
-
-    kind = data.split(":")[-1]  # pickup/delivery
-    context.user_data["checkout"] = {"type": kind}
-
-    await clear_ui(context, chat_id)
-    m = await context.bot.send_message(
-        chat_id=chat_id,
-        text=(
-            "✍️ Напишите комментарий.\n\n"
-            "• Для доставки: адрес + время + подъезд/код\n"
-            "• Для самовывоза: время\n"
-            "• Можно добавить: открытка, пожелания, цвет упаковки"
-        ),
-    )
-    track_msg(context, m.message_id)
-    return CHECKOUT_COMMENT
-
-async def checkout_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    chat_id = update.effective_chat.id
-    comment = (update.message.text or "").strip()
-
-    checkout = context.user_data.get("checkout")
-    if not isinstance(checkout, dict):
-        checkout = {}
-    checkout["comment"] = comment
-    context.user_data["checkout"] = checkout
-
-    cart = _get_cart(context)
-    kind = checkout.get("type", "pickup")
-    kind_label = "Самовывоз" if kind == "pickup" else "Доставка"
-
-    await clear_ui(context, chat_id)
-    m = await context.bot.send_message(
-        chat_id=chat_id,
-        text=preview,
-        parse_mode=ParseMode.HTML,
-        reply_markup=kb_checkout_confirm(),
-    )
-    track_msg(context, m.message_id)
-    return CHECKOUT_CONFIRM
-
-async def checkout_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    q = update.callback_query
-    await q.answer()
-    chat_id = q.message.chat_id
-    data = q.data or ""
-
-    if data == "checkout:cancel":
-        await render_cart(context, chat_id)
-        return ConversationHandler.END
-
-    if data != "checkout:send":
-        return CHECKOUT_CONFIRM
-
-    cart = _get_cart(context)
-    checkout = context.user_data.get("checkout", {})
-    kind = checkout.get("type", "pickup")
-    comment = checkout.get("comment", "")
-    kind_label = "Самовывоз" if kind == "pickup" else "Доставка"
-
-    user = q.from_user
-    user_line = f"{user.full_name} (@{user.username})" if user.username else user.full_name
-
-    admin_text = (
-        "🛎 <b>Новый заказ</b>\n\n"
-        f"Клиент: <b>{user_line}</b>\n"
-        f"Способ: <b>{kind_label}</b>\n\n"
-        f"{cart_text(cart)}\n\n"
-        f"Комментарий: <b>{comment or '—'}</b>"
-    )
-
-    await context.bot.send_message(
-        chat_id=ADMIN_CHAT_ID_INT,
-        text=admin_text,
-        parse_mode=ParseMode.HTML,
-    )
-
-    save_order_to_sheets(
-    user=q.from_user,
-    cart=cart,
-    kind=kind_label,
-    comment=comment,
-    
-    )   
-    
-    log.info(f"🟡 USER DATA KEYS: {list(context.user_data.keys())}")
-
-    # очистка
-    context.user_data["cart"] = {}
-    context.user_data.pop("checkout", None)
-
-    await clear_ui(context, chat_id)
-    m = await context.bot.send_message(
-        chat_id=chat_id,
-        text=(
-            "✅ <b>Заказ отправлен</b>\n\n"
-            "Если оплата при получении — просто ожидайте подтверждения."
-        ),
-        parse_mode=ParseMode.HTML,
-        reply_markup=kb_home(),
-    )
-    track_msg(context, m.message_id)
-    return ConversationHandler.END
-
-async def on_checkout_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    if not msg or not msg.reply_to_message:
-        return
-
-    chat_id = msg.chat_id
-    text = (msg.text or "").strip()
-    step = context.user_data.get("checkout_step")
-
-    # --- ЭТАП 1: ИМЯ ---
-    if step == "ask_name":
-        if not text:
-            await msg.reply_text("❌ Пожалуйста, введите имя.")
-            return
-
-        checkout = context.user_data.setdefault("checkout", {})
-        checkout["real_name"] = text
-        context.user_data["checkout_step"] = "ask_phone"
-
-        await clear_ui(context, chat_id)
-        m = await context.bot.send_message(
-            chat_id=chat_id,
-            text=(
-                "📞 <b>Ваш номер телефона</b>\n\n"
-                "Введите номер для связи ⬇️"
-            ),
-            parse_mode=ParseMode.HTML,
-            reply_markup=ForceReply(selective=True),
-        )
-        track_msg(context, m.message_id)
-        return
-
-    # --- ЭТАП 2: ТЕЛЕФОН ---
-    if step == "ask_phone":
-        if not text:
-            await msg.reply_text("❌ Пожалуйста, введите номер телефона.")
-            return
-
-        checkout = context.user_data.setdefault("checkout", {})
-        checkout["phone_number"] = text
-
-        save_user_contacts(
-            user_id=msg.from_user.id,
-            real_name=checkout.get("real_name"),
-            phone_number=text,
-        )
-
-        context.user_data["checkout_step"] = "type"
-
-        await clear_ui(context, chat_id)
-        m = await context.bot.send_message(
-            chat_id=chat_id,
-            text="🚚 <b>Выберите способ получения:</b>",
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb_checkout_pickup_delivery(),
-        )
-        track_msg(context, m.message_id)
-        return
-
-    # --- КОММЕНТАРИЙ ---
-    if step != "comment":
-        return
-
-    if not text:
-        await msg.reply_text("✍️ Напишите комментарий или '-'")
-        return
-
-    checkout = context.user_data.setdefault("checkout", {})
-    checkout["comment"] = text
-    context.user_data["checkout_step"] = "preview"
-
-    cart = _get_cart(context)
-    kind = checkout.get("type", "pickup")
-    kind_label = "Самовывоз" if kind == "pickup" else "Доставка"
-
-    preview_text = build_checkout_preview(
-        cart=cart,
-        kind_label=kind_label,
-        comment=text,
-    )
-
-    await clear_ui(context, chat_id)
-    m = await context.bot.send_message(
-        chat_id=chat_id,
-        text=preview_text,
-        parse_mode=ParseMode.HTML,
-        reply_markup=kb_checkout_preview(),
-    )
-    track_msg(context, m.message_id)
 
 
 async def on_staff_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2071,50 +1819,7 @@ async def render_catalog_products(
         track_msg(context, m.message_id)
 
     
-async def on_buyer_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    log.info("🔥 BUYER TEXT HANDLER FIRED")
 
-    chat_id = update.effective_chat.id
-
-    if chat_id in STAFF_CHAT_IDS:
-        return
-
-    msg = update.message
-    if not msg:
-        return
-
-    # 🔴 КЛЮЧЕВОЕ
-    if not msg.reply_to_message:
-        return
-
-    if context.user_data.get("checkout_step") != "comment":
-        return
-
-    text = (msg.text or "").strip()
-    if not text:
-        await msg.reply_text("✍️ Пожалуйста, напишите комментарий или '-'")
-        return
-
-    checkout = context.user_data.setdefault("checkout", {})
-    checkout["comment"] = text
-    context.user_data["checkout_step"] = "confirm"
-
-    cart = _get_cart(context)
-    kind = checkout.get("type", "pickup")
-    kind_label = "Самовывоз" if kind == "pickup" else "Доставка"
-
-    preview = build_checkout_preview(cart, kind_label, text)
-
-    step = context.user_data.get("checkout_step")
-
-    await clear_ui(context, chat_id)
-    m = await context.bot.send_message(
-        chat_id=chat_id,
-        text=preview,
-        parse_mode=ParseMode.HTML,
-        reply_markup=kb_checkout_preview(),
-    )
-    track_msg(context, m.message_id)
 
 async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
     service = get_sheets_service()
@@ -2181,20 +1886,15 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
             log.warning(f"⚠️ notify_staff failed for {staff_id}: {e}")
 
 async def on_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.user_data.get("checkout_step"):
+        return  # ❗ не мешаем checkout FSM
+
     if not update.message:
         return
 
-    # ❗ если это фото или документ — НЕ трогаем
-    if update.message.photo or update.message.document:
-        return
-
     chat_id = update.effective_chat.id
-
     if chat_id in STAFF_CHAT_IDS:
         await on_staff_text(update, context)
-        return
-
-    await on_buyer_text(update, context)
 
 def build_checkout_preview(cart: dict, kind_label: str, comment: str) -> str:
     return (
@@ -2264,13 +1964,7 @@ def main():
     )
     
 # -------- BUYER PHOTO (payment proof) --------
-    app.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            on_text_router
-        )
-    )
-
+    
     log.info("Bot started")
     app.run_polling(
         allowed_updates=[
