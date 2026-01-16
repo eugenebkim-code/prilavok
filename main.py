@@ -2050,29 +2050,7 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
         except Exception as e:
             log.warning(f"⚠️ notify_staff failed for {staff_id}: {e}")
 
-for staff_id in STAFF_CHAT_IDS:
-    try:
-        await context.bot.send_photo(
-            chat_id=staff_id,
-            photo=payment_file_id,
-            caption=caption,
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb_staff_order(order_id),
-        )
-    except Exception as e:
-        log.warning(f"⚠️ notify_staff failed for {staff_id}: {e}")
 
-    for staff_id in STAFF_CHAT_IDS:
-        try:
-            await context.bot.send_photo(
-                chat_id=staff_id,
-                photo=payment_file_id,
-                caption=caption,
-                parse_mode=ParseMode.HTML,
-                reply_markup=kb_staff_order(order_id),
-            )
-        except Exception as e:
-            log.warning(f"⚠️ notify_staff failed for {staff_id}: {e}")
 
 async def on_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("checkout_step"):
