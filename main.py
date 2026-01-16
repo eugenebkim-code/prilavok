@@ -99,6 +99,40 @@ ADMIN_CHAT_ID_INT = int(ADMIN_CHAT_ID)
 # helpers: storage
 # -------------------------
 
+def save_user_contacts(user_id: int, real_name: str, phone_number: str):
+    service = get_sheets_service()
+    sheet = service.spreadsheets()
+
+    result = sheet.values().get(
+        spreadsheetId=SPREADSHEET_ID,
+        range="users!A2:F",
+    ).execute()
+
+    rows = result.get("values", [])
+    target_row = None
+
+    for idx, row in enumerate(rows, start=2):
+        if row and row[0] == str(user_id):
+            target_row = idx
+            break
+
+    if not target_row:
+        return False
+
+    sheet.values().batchUpdate(
+        spreadsheetId=SPREADSHEET_ID,
+        body={
+            "valueInputOption": "RAW",
+            "data": [
+                {"range": f"users!E{target_row}", "values": [[real_name]]},
+                {"range": f"users!F{target_row}", "values": [[phone_number]]},
+            ],
+        },
+    ).execute()
+
+    return True
+
+
 def pop_waiting_desc(context: ContextTypes.DEFAULT_TYPE) -> str | None:
     return context.user_data.pop("waiting_desc_for", None)
 
@@ -938,14 +972,17 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         context.user_data["checkout"] = {}
-        context.user_data["checkout_step"] = "type"
+        context.user_data["checkout_step"] = "ask_name"
 
         await clear_ui(context, chat_id)
         m = await context.bot.send_message(
             chat_id=chat_id,
-            text="✅ <b>Оформление заказа</b>\n\nВыберите способ получения:",
+            text=(
+                "✍️ <b>Как вас зовут?</b>\n\n"
+                "Введите ваше имя и фамилию ⬇️"
+            ),
             parse_mode=ParseMode.HTML,
-            reply_markup=kb_checkout_pickup_delivery(),
+            reply_markup=ForceReply(selective=True),
         )
         track_msg(context, m.message_id)
         return
@@ -2014,6 +2051,60 @@ async def on_buyer_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kind_label = "Самовывоз" if kind == "pickup" else "Доставка"
 
     preview = build_checkout_preview(cart, kind_label, text)
+
+    step = context.user_data.get("checkout_step")
+
+# --- ЭТАП 1: ИМЯ ---
+    if step == "ask_name":
+        if not text:
+            await msg.reply_text("❌ Пожалуйста, введите имя.")
+            return
+
+        checkout = context.user_data.setdefault("checkout", {})
+        checkout["real_name"] = text
+        context.user_data["checkout_step"] = "ask_phone"
+
+        await clear_ui(context, chat_id)
+        m = await context.bot.send_message(
+            chat_id=chat_id,
+            text=(
+                "📞 <b>Ваш номер телефона</b>\n\n"
+                "Введите номер для связи ⬇️"
+            ),
+            parse_mode=ParseMode.HTML,
+            reply_markup=ForceReply(selective=True),
+        )
+        track_msg(context, m.message_id)
+        return
+
+# --- ЭТАП 2: ТЕЛЕФОН ---
+    if step == "ask_phone":
+        if not text:
+            await msg.reply_text("❌ Пожалуйста, введите номер телефона.")
+            return
+
+        checkout = context.user_data.setdefault("checkout", {})
+        checkout["phone_number"] = text
+
+        # сохраняем в users
+        save_user_contacts(
+            user_id=msg.from_user.id,
+            real_name=checkout.get("real_name"),
+            phone_number=text,
+        )
+
+        context.user_data["checkout_step"] = "type"
+
+        await clear_ui(context, chat_id)
+        m = await context.bot.send_message(
+            chat_id=chat_id,
+            text="🚚 <b>Выберите способ получения:</b>",
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb_checkout_pickup_delivery(),
+        )
+        track_msg(context, m.message_id)
+        return
+
 
     await clear_ui(context, chat_id)
     m = await context.bot.send_message(
