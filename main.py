@@ -266,7 +266,13 @@ def append_product_to_sheets(name: str, price: int, category: str, description: 
     except Exception:
         return None
 
-def save_order_to_sheets(user, cart: dict, kind: str, comment: str) -> str | None:
+def save_order_to_sheets(
+    user,
+    cart: dict,
+    kind: str,
+    comment: str,
+    address: str | None = None,
+) -> str | None:
     service = get_sheets_service()
     sheet = service.spreadsheets()
 
@@ -284,18 +290,18 @@ def save_order_to_sheets(user, cart: dict, kind: str, comment: str) -> str | Non
     created_at = datetime.utcnow().isoformat()
 
     row = [[
-        order_id,           # A order_id
-        created_at,         # B created_at
-        str(user.id),       # C buyer_chat_id
-        user.username or "",# D buyer_username
-        "; ".join(items),   # E items
-        total,              # F total
-        kind,               # G fulfillment
-        comment or "",      # H comment
-        "",                 # I payment_proof
-        "waiting_payment",  # J status
-        "",                 # K handled_at
-        "",                 # L handled_by
+        order_id,             # A order_id
+        created_at,           # B created_at
+        str(user.id),         # C buyer_chat_id
+        user.username or "",  # D buyer_username
+        "; ".join(items),     # E items
+        total,                # F total
+        kind,                 # G fulfillment
+        address or "",        # H address
+        comment or "",        # I comment
+        "waiting_payment",    # J status
+        "",                   # K handled_at
+        "",                   # L handled_by
     ]]
 
     try:
@@ -307,7 +313,10 @@ def save_order_to_sheets(user, cart: dict, kind: str, comment: str) -> str | Non
             body={"values": row},
         ).execute()
 
-        log.info(f"✅ ORDER APPENDED: order_id={order_id} resp={resp.get('updates', {}).get('updatedRange')}")
+        log.info(
+            f"✅ ORDER APPENDED: order_id={order_id} "
+            f"resp={resp.get('updates', {}).get('updatedRange')}"
+        )
         return order_id
 
     except Exception:
@@ -1022,6 +1031,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             cart=cart,
             kind=kind_label,
             comment=comment,
+            address=checkout.get("address"),
         )
         if not order_id:
             await clear_ui(context, chat_id)
@@ -1996,12 +2006,16 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
         items,
         total,
         kind,
+        address,
         comment,
         payment_file_id,
         status,
         *_,
     ) = target + [""] * 5
-
+    address_block = (
+        f"\n📍 <b>Адрес:</b>\n<code>{address}</code>\n"
+        if address else ""
+    )
     if status != "pending":
         log.info(f"ℹ️ notify_staff skipped: status={status}")
         return
@@ -2023,14 +2037,11 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
 
     # --- адрес (если есть в checkout) ---
     address = None
-    checkout = context.user_data.get("checkout")
-    if checkout:
-        address = checkout.get("address")
-
+    
     address_block = (
-        f"\n📍 <b>Адрес:</b>\n<code>{address}</code>\n"
-        if address else ""
-    )
+    f"\n📍 <b>Адрес:</b>\n<code>{address}</code>\n"
+    if address else ""
+)
 
     caption = (
         "🛎 <b>Новый заказ</b>\n\n"
