@@ -1062,7 +1062,11 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ).execute()
 
         # 5) уведомляем сотрудника ОДИН РАЗ
-        await notify_staff(context, order_id)
+        await notify_staff(
+            context,
+            order_id,
+            address=checkout.get("address"),
+        )
 
         # 6) чистим state
         context.user_data.pop("checkout", None)
@@ -1963,7 +1967,7 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
     service = get_sheets_service()
     sheet = service.spreadsheets()
 
-    # читаем заказ
+    # --- читаем заказ ---
     result = sheet.values().get(
         spreadsheetId=SPREADSHEET_ID,
         range="orders!A:L",
@@ -2002,9 +2006,38 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
         log.info(f"ℹ️ notify_staff skipped: status={status}")
         return
 
+    # --- читаем покупателя из users ---
+    buyer_name = ""
+    buyer_phone = ""
+
+    users = sheet.values().get(
+        spreadsheetId=SPREADSHEET_ID,
+        range="users!A:F",
+    ).execute().get("values", [])
+
+    for u in users:
+        if u and u[0] == buyer_chat_id:
+            buyer_name = u[4] if len(u) > 4 else ""
+            buyer_phone = u[5] if len(u) > 5 else ""
+            break
+
+    # --- адрес (если есть в checkout) ---
+    address = None
+    checkout = context.user_data.get("checkout")
+    if checkout:
+        address = checkout.get("address")
+
+    address_block = (
+        f"\n📍 <b>Адрес:</b>\n<code>{address}</code>\n"
+        if address else ""
+    )
+
     caption = (
         "🛎 <b>Новый заказ</b>\n\n"
-        f"🧾 ID: <code>{order_id}</code>\n"
+        f"🧾 ID: <code>{order_id}</code>\n\n"
+        f"👤 <b>Имя:</b> {buyer_name or '—'}\n"
+        f"📞 <b>Телефон:</b> <code>{buyer_phone or '—'}</code>\n"
+        f"{address_block}\n"
         f"{items}\n\n"
         f"Итого: <b>{_fmt_money(int(total))}</b>\n"
         f"Способ: <b>{kind}</b>\n"
