@@ -790,6 +790,96 @@ async def dash_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.HTML,
     )
 
+# -------------------------
+# чекаут
+# -------------------------
+
+async def on_checkout_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    if not msg or not msg.reply_to_message:
+        return
+
+    chat_id = msg.chat_id
+    text = (msg.text or "").strip()
+    step = context.user_data.get("checkout_step")
+
+    # --- ЭТАП 1: ИМЯ ---
+    if step == "ask_name":
+        if not text:
+            await msg.reply_text("❌ Пожалуйста, введите имя.")
+            return
+
+        checkout = context.user_data.setdefault("checkout", {})
+        checkout["real_name"] = text
+        context.user_data["checkout_step"] = "ask_phone"
+
+        await clear_ui(context, chat_id)
+        m = await context.bot.send_message(
+            chat_id=chat_id,
+            text="📞 <b>Ваш номер телефона</b>\n\nВведите номер для связи ⬇️",
+            parse_mode=ParseMode.HTML,
+            reply_markup=ForceReply(selective=True),
+        )
+        track_msg(context, m.message_id)
+        return
+
+    # --- ЭТАП 2: ТЕЛЕФОН ---
+    if step == "ask_phone":
+        if not text:
+            await msg.reply_text("❌ Пожалуйста, введите номер телефона.")
+            return
+
+        checkout = context.user_data.setdefault("checkout", {})
+        checkout["phone_number"] = text
+
+        save_user_contacts(
+            user_id=msg.from_user.id,
+            real_name=checkout.get("real_name"),
+            phone_number=text,
+        )
+
+        context.user_data["checkout_step"] = "type"
+
+        await clear_ui(context, chat_id)
+        m = await context.bot.send_message(
+            chat_id=chat_id,
+            text="🚚 <b>Выберите способ получения:</b>",
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb_checkout_pickup_delivery(),
+        )
+        track_msg(context, m.message_id)
+        return
+
+    # --- ЭТАП 3: КОММЕНТАРИЙ ---
+    if step != "comment":
+        return
+
+    if not text:
+        await msg.reply_text("✍️ Напишите комментарий или '-'")
+        return
+
+    checkout = context.user_data.setdefault("checkout", {})
+    checkout["comment"] = text
+    context.user_data["checkout_step"] = "preview"
+
+    cart = _get_cart(context)
+    kind = checkout.get("type", "pickup")
+    kind_label = "Самовывоз" if kind == "pickup" else "Доставка"
+
+    preview_text = build_checkout_preview(
+        cart=cart,
+        kind_label=kind_label,
+        comment=text,
+    )
+
+    await clear_ui(context, chat_id)
+    m = await context.bot.send_message(
+        chat_id=chat_id,
+        text=preview_text,
+        parse_mode=ParseMode.HTML,
+        reply_markup=kb_checkout_preview(),
+    )
+    track_msg(context, m.message_id)
 
 # -------------------------
 # main router (callbacks)
