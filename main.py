@@ -795,6 +795,31 @@ async def dash_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # -------------------------
 
 async def on_checkout_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    
+    # --- ЭТАП: АДРЕС (ТОЛЬКО ДЛЯ ДОСТАВКИ) ---
+    if step == "ask_address":
+        if not text:
+            await msg.reply_text("❌ Пожалуйста, введите адрес на корейском.")
+            return
+
+        checkout = context.user_data.setdefault("checkout", {})
+        checkout["address"] = text
+
+        context.user_data["checkout_step"] = "comment"
+
+        await clear_ui(context, chat_id)
+        m = await context.bot.send_message(
+            chat_id=chat_id,
+            text=(
+                "✍️ Напишите комментарий к заказу.\n\n"
+                "• Например: удобное время доставки\n\n"
+                "⬇️ Ответьте на это сообщение"
+            ),
+            reply_markup=ForceReply(selective=True),
+        )
+        track_msg(context, m.message_id)
+        return
+    
     msg = update.message
     if not msg or not msg.reply_to_message:
         return
@@ -1080,26 +1105,41 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("checkout:type:"):
         kind = data.split(":")[-1]
 
-        context.user_data["checkout"] = {"type": kind}
-        context.user_data["checkout_step"] = "comment"
+        checkout = context.user_data.setdefault("checkout", {})
+        checkout["type"] = kind
 
         await clear_ui(context, chat_id)
+
+        # 🚚 ДОСТАВКА → СПРАШИВАЕМ АДРЕС
+        if kind == "delivery":
+            context.user_data["checkout_step"] = "ask_address"
+
+            m = await context.bot.send_message(
+                chat_id=chat_id,
+                text=(
+                    "📍 <b>Укажите адрес доставки</b>\n\n"
+                    "Введите адрес <b>на корейском языке</b>.\n"
+                    "Это нужно для правильной навигации курьера ⬇️"
+                ),
+                parse_mode=ParseMode.HTML,
+                reply_markup=ForceReply(selective=True),
+            )
+            track_msg(context, m.message_id)
+            return
+
+        # 🚶 САМОВЫВОЗ → СРАЗУ К КОММЕНТАРИЮ
+        context.user_data["checkout_step"] = "comment"
 
         m = await context.bot.send_message(
             chat_id=chat_id,
             text=(
                 "✍️ Напишите комментарий к заказу.\n\n"
-                "• Для доставки: адрес + время\n"
-                "• Для самовывоза: время\n\n"
+                "• Укажите удобное время самовывоза\n\n"
                 "⬇️ Ответьте на это сообщение"
             ),
             reply_markup=ForceReply(selective=True),
         )
-
-        context.user_data["comment_reply_to"] = m.message_id
         track_msg(context, m.message_id)
-
-        log.info("🟢 FORCE REPLY SENT, WAITING FOR COMMENT")
         return
     
     if data == "checkout:attach":
@@ -1991,6 +2031,18 @@ def build_checkout_preview(cart: dict, kind_label: str, comment: str) -> str:
         "🧾 <b>Проверьте заказ</b>\n\n"
         f"{cart_text(cart)}\n\n"
         f"Способ: <b>{kind_label}</b>\n"
+        address = checkout.get("address")
+
+    address_block = (
+        f"Адрес: <b>{address}</b>\n"
+        if address else ""
+    )
+
+    return (
+        "🧾 <b>Проверьте заказ</b>\n\n"
+        f"{cart_text(cart)}\n\n"
+        f"Способ: <b>{kind_label}</b>\n"
+        f"{address_block}"
         f"Комментарий: <b>{comment or '—'}</b>\n\n"
         "Чтобы отправить заказ, прикрепите фото оплаты ⬇️"
     )
