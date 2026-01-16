@@ -292,16 +292,17 @@ def save_order_to_sheets(
     row = [[
         order_id,             # A order_id
         created_at,           # B created_at
-        str(user.id),         # C buyer_chat_id
-        user.username or "",  # D buyer_username
+        str(user.id),         # C user_id
+        user.username or "",  # D username
         "; ".join(items),     # E items
-        total,                # F total
-        kind,                 # G fulfillment
-        address or "",        # H address
-        comment or "",        # I comment
+        total,                # F total_price
+        kind,                 # G type
+        comment or "",        # H comment
+        "",                   # I payment_proof (позже)
         "waiting_payment",    # J status
         "",                   # K handled_at
         "",                   # L handled_by
+        "",                   # M reaction_seconds
     ]]
 
     try:
@@ -2015,6 +2016,15 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
     if status != "pending":
         log.info(f"ℹ️ notify_staff skipped: status={status}")
         return
+
+    for staff_id in STAFF_CHAT_IDS:
+        await context.bot.send_photo(
+            chat_id=staff_id,
+            photo=payment_file_id,
+            caption=caption,
+            parse_mode=ParseMode.HTML,
+            reply_markup=kb_staff_order(order_id),
+        )
 
     # --- читаем покупателя из users ---
     buyer_name = ""
