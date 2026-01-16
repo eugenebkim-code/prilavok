@@ -795,31 +795,6 @@ async def dash_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # -------------------------
 
 async def on_checkout_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    
-    # --- ЭТАП: АДРЕС (ТОЛЬКО ДЛЯ ДОСТАВКИ) ---
-    if step == "ask_address":
-        if not text:
-            await msg.reply_text("❌ Пожалуйста, введите адрес на корейском.")
-            return
-
-        checkout = context.user_data.setdefault("checkout", {})
-        checkout["address"] = text
-
-        context.user_data["checkout_step"] = "comment"
-
-        await clear_ui(context, chat_id)
-        m = await context.bot.send_message(
-            chat_id=chat_id,
-            text=(
-                "✍️ Напишите комментарий к заказу.\n\n"
-                "• Например: удобное время доставки\n\n"
-                "⬇️ Ответьте на это сообщение"
-            ),
-            reply_markup=ForceReply(selective=True),
-        )
-        track_msg(context, m.message_id)
-        return
-    
     msg = update.message
     if not msg or not msg.reply_to_message:
         return
@@ -841,7 +816,10 @@ async def on_checkout_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await clear_ui(context, chat_id)
         m = await context.bot.send_message(
             chat_id=chat_id,
-            text="📞 <b>Ваш номер телефона</b>\n\nВведите номер для связи ⬇️",
+            text=(
+                "📞 <b>Ваш номер телефона</b>\n\n"
+                "Введите номер для связи ⬇️"
+            ),
             parse_mode=ParseMode.HTML,
             reply_markup=ForceReply(selective=True),
         )
@@ -871,6 +849,30 @@ async def on_checkout_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text="🚚 <b>Выберите способ получения:</b>",
             parse_mode=ParseMode.HTML,
             reply_markup=kb_checkout_pickup_delivery(),
+        )
+        track_msg(context, m.message_id)
+        return
+
+    # --- ЭТАП 2.5: АДРЕС (ТОЛЬКО ДЛЯ ДОСТАВКИ) ---
+    if step == "ask_address":
+        if not text:
+            await msg.reply_text("❌ Пожалуйста, введите адрес на корейском.")
+            return
+
+        checkout = context.user_data.setdefault("checkout", {})
+        checkout["address"] = text
+
+        context.user_data["checkout_step"] = "comment"
+
+        await clear_ui(context, chat_id)
+        m = await context.bot.send_message(
+            chat_id=chat_id,
+            text=(
+                "✍️ Напишите комментарий к заказу.\n\n"
+                "• Например: удобное время доставки\n\n"
+                "⬇️ Ответьте на это сообщение"
+            ),
+            reply_markup=ForceReply(selective=True),
         )
         track_msg(context, m.message_id)
         return
