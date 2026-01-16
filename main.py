@@ -303,12 +303,13 @@ def save_order_to_sheets(
         "",                   # K handled_at
         "",                   # L handled_by
         "",                   # M reaction_seconds
+        address or "",        # N address (NEW)
     ]]
 
     try:
         resp = sheet.values().append(
             spreadsheetId=SPREADSHEET_ID,
-            range="orders!A:M",
+            range="orders!A:N",
             valueInputOption="RAW",
             insertDataOption="INSERT_ROWS",
             body={"values": row},
@@ -720,7 +721,7 @@ async def dash_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     result = sheet.values().get(
         spreadsheetId=SPREADSHEET_ID,
-        range="orders!A:M",
+        range="orders!A:N",
     ).execute()
 
     rows = result.get("values", [])
@@ -1270,7 +1271,7 @@ async def on_staff_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # --- читаем заказы ---
     result = sheet.values().get(
         spreadsheetId=SPREADSHEET_ID,
-        range="orders!A:M",  # ⬅️ до reaction_seconds
+        range="orders!A:N",  # ⬅️ до reaction_seconds
     ).execute()
 
     rows = result.get("values", [])
@@ -1977,7 +1978,7 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
     # --- читаем заказы ---
     result = sheet.values().get(
         spreadsheetId=SPREADSHEET_ID,
-        range="orders!A:M",
+        range="orders!A:N",
     ).execute()
 
     rows = result.get("values", [])
@@ -1994,18 +1995,21 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
         return
 
     (
-        _order_id,          # A
-        created_at,         # B
-        buyer_chat_id,      # C
-        buyer_username,     # D
-        items,              # E
-        total,              # F
-        kind,               # G
-        comment,            # H
-        payment_file_id,    # I
-        status,             # J
-        *_,
-    ) = target + [""] * 5
+        _order_id,        # A
+        created_at,       # B
+        buyer_chat_id,    # C
+        buyer_username,   # D
+        items,            # E
+        total,            # F
+        kind,             # G
+        comment,          # H
+        payment_file_id,  # I
+        status,           # J
+        *_rest,
+    ) = target + [""] * 10
+
+    # колонка N (address)
+    address = target[13] if len(target) > 13 else ""
 
     if status != "pending":
         return
@@ -2025,19 +2029,23 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
             buyer_phone = u[5] if len(u) > 5 else ""
             break
 
-    # --- формируем сообщение ---
+    address_block = (
+        f"\n📍 <b>Адрес:</b>\n<code>{address}</code>\n"
+        if address else ""
+    )
+
     caption = (
         "🛎 <b>Новый заказ</b>\n\n"
         f"🧾 ID: <code>{order_id}</code>\n\n"
         f"👤 <b>Имя:</b> {buyer_name or '—'}\n"
-        f"📞 <b>Телефон:</b> <code>{buyer_phone or '—'}</code>\n\n"
+        f"📞 <b>Телефон:</b> <code>{buyer_phone or '—'}</code>\n"
+        f"{address_block}\n"
         f"{items}\n\n"
         f"💰 Итого: <b>{_fmt_money(int(total))}</b>\n"
         f"🚚 Способ: <b>{kind}</b>\n"
         f"💬 Комментарий: <b>{comment or '—'}</b>"
     )
 
-    # --- отправляем сотрудникам ---
     for staff_id in STAFF_CHAT_IDS:
         try:
             await context.bot.send_photo(
