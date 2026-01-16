@@ -1974,6 +1974,7 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
     service = get_sheets_service()
     sheet = service.spreadsheets()
 
+    # --- читаем заказы ---
     result = sheet.values().get(
         spreadsheetId=SPREADSHEET_ID,
         range="orders!A:M",
@@ -1993,22 +1994,23 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
         return
 
     (
-        _order_id,
-        created_at,
-        buyer_chat_id,
-        buyer_username,
-        items,
-        total,
-        kind,
-        comment,
-        payment_file_id,
-        status,
+        _order_id,          # A
+        created_at,         # B
+        buyer_chat_id,      # C
+        buyer_username,     # D
+        items,              # E
+        total,              # F
+        kind,               # G
+        comment,            # H
+        payment_file_id,    # I
+        status,             # J
         *_,
     ) = target + [""] * 5
 
     if status != "pending":
         return
 
+    # --- вытаскиваем имя / телефон из users ---
     buyer_name = ""
     buyer_phone = ""
 
@@ -2023,17 +2025,19 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
             buyer_phone = u[5] if len(u) > 5 else ""
             break
 
+    # --- формируем сообщение ---
     caption = (
         "🛎 <b>Новый заказ</b>\n\n"
         f"🧾 ID: <code>{order_id}</code>\n\n"
         f"👤 <b>Имя:</b> {buyer_name or '—'}\n"
         f"📞 <b>Телефон:</b> <code>{buyer_phone or '—'}</code>\n\n"
         f"{items}\n\n"
-        f"Итого: <b>{_fmt_money(int(total))}</b>\n"
-        f"Способ: <b>{kind}</b>\n"
-        f"Комментарий: <b>{comment or '—'}</b>"
+        f"💰 Итого: <b>{_fmt_money(int(total))}</b>\n"
+        f"🚚 Способ: <b>{kind}</b>\n"
+        f"💬 Комментарий: <b>{comment or '—'}</b>"
     )
 
+    # --- отправляем сотрудникам ---
     for staff_id in STAFF_CHAT_IDS:
         try:
             await context.bot.send_photo(
@@ -2044,7 +2048,7 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
                 reply_markup=kb_staff_order(order_id),
             )
         except Exception as e:
-            log.warning(f"notify_staff failed for {staff_id}: {e}")
+            log.warning(f"⚠️ notify_staff failed for {staff_id}: {e}")
 
 for staff_id in STAFF_CHAT_IDS:
     try:
