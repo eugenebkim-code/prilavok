@@ -1162,17 +1162,10 @@ async def on_staff_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def on_catalog_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    
-    if data == "catalog:back":
-        await render_catalog_categories(context, chat_id)
+    q = update.callback_query
+    if not q or not q.message:
         return
 
-    if data.startswith("catalog:cat:"):
-        category = data.split(":", 2)[2]
-        await render_catalog_products(context, chat_id, category)
-        return
-    
-    q = update.callback_query
     await q.answer()
 
     chat_id = q.message.chat_id
@@ -1181,7 +1174,21 @@ async def on_catalog_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_id not in STAFF_CHAT_IDS:
         return
 
+    # --- NAV внутри staff-каталога ---
+    if data == "catalog:back":
+        await render_catalog_categories(context, chat_id)
+        return
+
+    if data.startswith("catalog:cat:"):
+        category = data.split(":", 2)[2]
+        await render_catalog_products(context, chat_id, category)
+        return
+
+    # --- действия по товару / добавление ---
     parts = data.split(":")
+    if len(parts) < 3:
+        return
+
     action = parts[1]
     product_id = parts[2]
 
@@ -1195,29 +1202,38 @@ async def on_catalog_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if action == "desc":
         context.user_data["waiting_desc_for"] = product_id
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text="📝 Введите описание товара:",
-        )
+        await context.bot.send_message(chat_id=chat_id, text="📝 Введите описание товара:")
         return
 
     if action == "price":
         context.user_data["waiting_price_for"] = product_id
+        await context.bot.send_message(chat_id=chat_id, text="✏️ Введите новую цену (только число, в вонах):")
+        return
+
+    if action == "photo":
+        set_waiting_photo(context, product_id)
         await context.bot.send_message(
             chat_id=chat_id,
-            text="✏️ Введите новую цену (только число, в вонах):",
+            text=(
+                "📷 Отправьте фото для товара.\n\n"
+                "Можно отправить одно фото.\n"
+                "Оно будет привязано к позиции."
+            ),
         )
         return
 
-    products = read_products_from_sheets()
-    product = next((p for p in products if p["product_id"] == product_id), None)
-    if not product:
-        return
-
-    # 1. скрыть / показать
     if action == "toggle":
+        products = read_products_from_sheets()
+        product = next((p for p in products if p["product_id"] == product_id), None)
+        if not product:
+            return
         set_product_available(product_id, not product["available"])
-        await catalog_cmd(update, context)
+        # остаемся в той же категории, если она сохранена
+        current_cat = context.user_data.get("catalog_category")
+        if current_cat:
+            await render_catalog_products(context, chat_id, current_cat)
+        else:
+            await catalog_cmd(update, context)
         return
 
 # 1️⃣ ЕСЛИ ЭТО ФОТО — НИЧЕГО НЕ ПЕРЕКЛЮЧАЕМ
@@ -1836,6 +1852,7 @@ async def catalog_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         track_msg(context, msg.message_id)
 
 async def render_catalog_products(
+    
     context: ContextTypes.DEFAULT_TYPE,
     chat_id: int,
     category: str,
@@ -1844,7 +1861,7 @@ async def render_catalog_products(
         p for p in read_products_from_sheets()
         if p.get("category") == category
     ]
-
+    context.user_data["catalog_category"] = category
     await clear_ui(context, chat_id)
 
     header = await context.bot.send_message(
