@@ -897,6 +897,7 @@ async def on_checkout_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cart=cart,
         kind_label=kind_label,
         comment=text,
+        address=checkout.get("address"),
     )
 
     await clear_ui(context, chat_id)
@@ -1206,7 +1207,12 @@ async def on_buyer_payment_photo(update: Update, context: ContextTypes.DEFAULT_T
     kind_label = "Самовывоз" if kind == "pickup" else "Доставка"
     comment = checkout.get("comment", "")
 
-    preview_text = build_checkout_preview(cart, kind_label, comment)
+    preview_text = build_checkout_preview(
+        cart=cart,
+        kind_label=kind_label,
+        comment=text,
+        address=checkout.get("address"),
+    )
 
     await clear_ui(context, chat_id)
     m = await context.bot.send_message(
@@ -2028,13 +2034,12 @@ async def on_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_id in STAFF_CHAT_IDS:
         await on_staff_text(update, context)
 
-def build_checkout_preview(cart: dict, kind_label: str, comment: str) -> str:
-    return (
-        "🧾 <b>Проверьте заказ</b>\n\n"
-        f"{cart_text(cart)}\n\n"
-        f"Способ: <b>{kind_label}</b>\n"
-        address = checkout.get("address")
-
+def build_checkout_preview(
+    cart: dict,
+    kind_label: str,
+    comment: str,
+    address: str | None = None,
+) -> str:
     address_block = (
         f"Адрес: <b>{address}</b>\n"
         if address else ""
