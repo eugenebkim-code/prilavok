@@ -2009,7 +2009,6 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
     if status != "pending":
         return
 
-    # --- читаем покупателя ---
     buyer_name = ""
     buyer_phone = ""
 
