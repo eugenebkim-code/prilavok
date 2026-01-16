@@ -1004,8 +1004,8 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # 1) строгая проверка шага
-        if context.user_data.get("checkout_step") != "ready_to_send":
-            log.warning("⛔ final_send ignored: wrong checkout_step")
+        if not checkout.get("payment_photo_file_id"):
+            log.warning("⛔ final_send ignored: no payment photo")
             return
 
         # 2) обязательные данные
@@ -1177,8 +1177,8 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=ForceReply(selective=True),
         )
 
-        checkout["photo_reply_to"] = m.message_id
         context.user_data["checkout_step"] = "wait_photo"
+        checkout["photo_reply_to"] = m.message_id
         track_msg(context, m.message_id)
         return
 
