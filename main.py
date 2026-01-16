@@ -1075,7 +1075,6 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await notify_staff(
             context,
             order_id,
-            address=checkout.get("address"),
         )
 
         # 6) чистим state
@@ -1970,9 +1969,6 @@ async def render_catalog_products(
         )
         track_msg(context, m.message_id)
 
-    
-
-
 async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
     service = get_sheets_service()
     sheet = service.spreadsheets()
@@ -2034,14 +2030,6 @@ async def notify_staff(context: ContextTypes.DEFAULT_TYPE, order_id: str):
             buyer_name = u[4] if len(u) > 4 else ""
             buyer_phone = u[5] if len(u) > 5 else ""
             break
-
-    # --- адрес (если есть в checkout) ---
-    address = None
-    
-    address_block = (
-    f"\n📍 <b>Адрес:</b>\n<code>{address}</code>\n"
-    if address else ""
-)
 
     caption = (
         "🛎 <b>Новый заказ</b>\n\n"
