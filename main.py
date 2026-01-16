@@ -1162,6 +1162,16 @@ async def on_staff_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def on_catalog_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    
+    if data == "catalog:back":
+        await render_catalog_categories(context, chat_id)
+        return
+
+    if data.startswith("catalog:cat:"):
+        category = data.split(":", 2)[2]
+        await render_catalog_products(context, chat_id, category)
+        return
+    
     q = update.callback_query
     await q.answer()
 
@@ -1753,6 +1763,36 @@ def kb_catalog_controls() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("➕ Добавить товар", callback_data="catalog:add:0")]
     ])
 
+async def render_catalog_categories(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+    products = read_products_from_sheets()
+    categories = sorted({
+        p["category"] for p in products if p.get("category")
+    })
+
+    await clear_ui(context, chat_id)
+
+    if not categories:
+        m = await context.bot.send_message(
+            chat_id=chat_id,
+            text="Категорий нет.",
+        )
+        track_msg(context, m.message_id)
+        return
+
+    rows = [
+        [InlineKeyboardButton(cat, callback_data=f"catalog:cat:{cat}")]
+        for cat in categories
+    ]
+
+    m = await context.bot.send_message(
+        chat_id=chat_id,
+        text="🛠 <b>Каталог</b>\nВыберите категорию:",
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup(rows),
+    )
+    track_msg(context, m.message_id)
+
+
 async def catalog_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
 
@@ -1760,23 +1800,69 @@ async def catalog_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     products = read_products_from_sheets()
+    categories = sorted({
+        p["category"]
+        for p in products
+        if p.get("category")
+    })
 
     await clear_ui(context, chat_id)
 
     header = await context.bot.send_message(
         chat_id=chat_id,
-        text="🛠 <b>Управление каталогом</b>",
+        text="🛠 <b>Управление каталогом</b>\n\nВыберите категорию:",
         parse_mode=ParseMode.HTML,
         reply_markup=kb_catalog_controls(),
     )
     track_msg(context, header.message_id)
 
-    if not products:
+    if not categories:
         msg = await context.bot.send_message(
             chat_id=chat_id,
-            text="Каталог пуст.",
+            text="Категорий пока нет.",
         )
         track_msg(context, msg.message_id)
+        return
+
+    for cat in categories:
+        msg = await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"📦 <b>{cat}</b>",
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("Открыть", callback_data=f"catalog:cat:{cat}")]
+            ]),
+        )
+        track_msg(context, msg.message_id)
+
+async def render_catalog_products(
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_id: int,
+    category: str,
+):
+    products = [
+        p for p in read_products_from_sheets()
+        if p.get("category") == category
+    ]
+
+    await clear_ui(context, chat_id)
+
+    header = await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"🛠 <b>{category}</b>",
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("⬅️ Категории", callback_data="catalog:back")]
+        ]),
+    )
+    track_msg(context, header.message_id)
+
+    if not products:
+        m = await context.bot.send_message(
+            chat_id=chat_id,
+            text="В этой категории нет товаров.",
+        )
+        track_msg(context, m.message_id)
         return
 
     for i, p in enumerate(products, start=1):
@@ -1787,7 +1873,7 @@ async def catalog_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Статус: {status}"
         )
 
-        msg = await context.bot.send_message(
+        m = await context.bot.send_message(
             chat_id=chat_id,
             text=text,
             parse_mode=ParseMode.HTML,
@@ -1796,7 +1882,7 @@ async def catalog_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 p["available"],
             ),
         )
-        track_msg(context, msg.message_id)
+        track_msg(context, m.message_id)
 
     
 async def on_buyer_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
