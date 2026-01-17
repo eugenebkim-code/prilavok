@@ -2115,10 +2115,10 @@ def build_checkout_preview(
 
 def main():
     
-    app.add_handler(CommandHandler("clear", clear_cmd))
+    
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("restart", restart_cmd))
-
+    app.add_handler(CommandHandler("clear", clear_cmd))
     # -------- COMMANDS --------
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("catalog", catalog_cmd))
