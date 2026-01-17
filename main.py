@@ -475,7 +475,29 @@ def kb_checkout_preview():
         [InlineKeyboardButton("📎 Прикрепить фото оплаты", callback_data="checkout:attach")],
         [InlineKeyboardButton("❌ Отмена", callback_data="checkout:cancel")],
     ])
+# -------------------------
+# menu button telegram
+# -------------------------
 
+async def clear_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    await clear_ui(context, chat_id)
+
+async def restart_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+
+    context.user_data.clear()
+
+    await clear_ui(context, chat_id)
+    await render_home(context, chat_id)
+
+async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "ℹ️ Команды:\n"
+        "/start — открыть прилавок\n"
+        "/clear — очистить экран\n"
+        "/restart — начать заново"
+    )
 
 # -------------------------
 # render screens (always: clear -> send)
@@ -2092,7 +2114,10 @@ def build_checkout_preview(
     )
 
 def main():
+    
+    app.add_handler(CommandHandler("clear", clear_cmd))
     app = Application.builder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("restart", restart_cmd))
 
     # -------- COMMANDS --------
     app.add_handler(CommandHandler("start", start_cmd))
