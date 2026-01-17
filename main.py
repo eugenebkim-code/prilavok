@@ -2117,10 +2117,11 @@ def main():
     
     
     app = Application.builder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("restart", restart_cmd))
-    app.add_handler(CommandHandler("clear", clear_cmd))
     # -------- COMMANDS --------
     app.add_handler(CommandHandler("start", start_cmd))
+    app.add_handler(CommandHandler("restart", restart_cmd))
+    app.add_handler(CommandHandler("clear", clear_cmd))
+    app.add_handler(CommandHandler("help", help_cmd))  # ← ВОТ ЭТОГО НЕ ХВАТАЛО
     app.add_handler(CommandHandler("catalog", catalog_cmd))
     app.add_handler(CommandHandler("dash", dash_cmd))
 
